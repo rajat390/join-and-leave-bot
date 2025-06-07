@@ -78,27 +78,10 @@ app.post('/', async (req, res) => {
       const botUsername = botInfo.result.username
       await sendMessage(chat_id, `👋 <b>Welcome to the bot!</b>`, message_id, {
         inline_keyboard: [
-          [{ text: '➕ Add to Group', url: `https://t.me/${botUsername}?startgroup=true` }],
-          [{ text: '📢 Join Channel', url: `https://t.me/${botUsername}' }]
+          [{ text: '➕ Add to Group', url: `https://t.me/${botUsername}?startgroup=true` }]
         ]
       })
     }
-
-    if (text === '/checkbot') {
-      const id = await getBotId()
-      const res2 = await fetch(`${API_URL}/getChatMember?chat_id=${chat_id}&user_id=${id}`)
-      const data2 = await res2.json()
-      if (!data2.ok || ['left', 'kicked'].includes(data2.result.status)) {
-        await sendMessage(chat_id, '❌ <b>Bot is not a member of this chat or has been removed.</b>', message_id)
-      } else {
-        await sendMessage(chat_id, `✅ <b>Bot is currently a member of this chat.</b>\nStatus: <code>${data2.result.status}</code>`, message_id)
-      }
-    }
-
-    if (msg.new_chat_members || msg.left_chat_member) {
-      await deleteMessage(chat_id, message_id)
-    }
-  }
 
   if (body.my_chat_member || body.chat_member) {
     const data = body.my_chat_member || body.chat_member
