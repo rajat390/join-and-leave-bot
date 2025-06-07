@@ -78,74 +78,72 @@ app.post('/', async (req, res) => {
       const botUsername = botInfo.result.username
       await sendMessage(chat_id, `👋 <b>Welcome to the bot!</b>`, message_id, {
         inline_keyboard: [
-          [{ text: '➕ Add to Group', url: `https://t.me/${botUsername}?startgroup=true` }]
+          [{ text: '➕ Add to Group', url: `https://t.me/${botUsername}?startgroup=true` }],
+          [{ text: '📢 Join Channel', url: `https://t.me/${botUsername}` }]
         ]
       })
     }
 
-  if (body.my_chat_member || body.chat_member) {
-    const data = body.my_chat_member || body.chat_member
+    if (msg.new_chat_members || msg.left_chat_member) {
+      await deleteMessage(chat_id, message_id)
+    }
+  }
+
+  if (body.chat_member) {
+    const data = body.chat_member
     const chat = data.chat
+    const user = data.new_chat_member.user
     const oldStatus = data.old_chat_member.status
     const newStatus = data.new_chat_member.status
-    const user = data.new_chat_member.user
-
-    const id = await getBotId()
+    const performedBy = data.from // Who did the action
     const memberCount = await getMemberCount(chat.id)
+    const isBot = user.is_bot
+    const isSelf = user.id === performedBy.id
 
-    if (user.id === id) {
-      if (notifyBotJoinLeave) {
-        if (newStatus === 'member' && (oldStatus === 'left' || oldStatus === 'kicked')) {
-          await notifyAdmins(chat.id, `
-🤖 <b>Bot Added to Chat</b>
-
-📢 <b>Chat:</b> ${chat.title}
-🆔 <b>Chat ID:</b> <code>${chat.id}</code>
-📚 <b>Type:</b> ${chat.type}
-👥 <b>Total Members:</b> ${memberCount}
-          `.trim())
-        }
-
-        if ((newStatus === 'left' || newStatus === 'kicked') && (oldStatus === 'member' || oldStatus === 'administrator' || oldStatus === 'creator')) {
-          await notifyAdmins(chat.id, `
-⚠️ <b>Bot Removed from Chat</b>
-
-📢 <b>Chat:</b> ${chat.title}
-🆔 <b>Chat ID:</b> <code>${chat.id}</code>
-📚 <b>Type:</b> ${chat.type}
-👥 <b>Total Members:</b> ${memberCount}
-          `.trim())
-        }
-      }
-    } else {
-      if (notifyJoin && newStatus === 'member' && (oldStatus === 'left' || oldStatus === 'kicked')) {
-        await notifyAdmins(chat.id, `
+    if (notifyJoin && !isBot && oldStatus === 'left' && newStatus === 'member') {
+      await notifyAdmins(chat.id, `
 ✅ <b>User Joined</b>
 
-👤 <b>User:</b> ${user.first_name || ''} ${user.last_name || ''}
+👤 <b>Name:</b> ${user.first_name || ''} ${user.last_name || ''}
 🔗 <b>Username:</b> @${user.username || 'N/A'}
 🆔 <b>User ID:</b> <code>${user.id}</code>
 
 📢 <b>Group:</b> ${chat.title}
 🆔 <b>Chat ID:</b> <code>${chat.id}</code>
-📚 <b>Type:</b> ${chat.type}
 👥 <b>Total Members:</b> ${memberCount}
-        `.trim())
-      }
-      if (notifyLeave && (newStatus === 'left' || newStatus === 'kicked') && (oldStatus === 'member' || oldStatus === 'administrator' || oldStatus === 'creator')) {
-        await notifyAdmins(chat.id, `
-🚪 <b>User Left</b>
+      `.trim())
+    }
 
-👤 <b>User:</b> ${user.first_name || ''} ${user.last_name || ''}
+    if (notifyLeave && oldStatus === 'member' && newStatus === 'left' && isSelf) {
+      await notifyAdmins(chat.id, `
+🚪 <b>User Left Voluntarily</b>
+
+👤 <b>Name:</b> ${user.first_name || ''} ${user.last_name || ''}
 🔗 <b>Username:</b> @${user.username || 'N/A'}
 🆔 <b>User ID:</b> <code>${user.id}</code>
 
 📢 <b>Group:</b> ${chat.title}
 🆔 <b>Chat ID:</b> <code>${chat.id}</code>
-📚 <b>Type:</b> ${chat.type}
 👥 <b>Total Members:</b> ${memberCount}
-        `.trim())
-      }
+      `.trim())
+    }
+
+    if (notifyLeave && oldStatus === 'member' && newStatus === 'kicked' && !isSelf) {
+      await notifyAdmins(chat.id, `
+❌ <b>User Removed</b>
+
+👤 <b>Removed User:</b> ${user.first_name || ''} ${user.last_name || ''}
+🔗 <b>Username:</b> @${user.username || 'N/A'}
+🆔 <b>User ID:</b> <code>${user.id}</code>
+
+🛡️ <b>Removed By:</b> ${performedBy.first_name || ''} ${performedBy.last_name || ''}
+🔗 <b>Username:</b> @${performedBy.username || 'N/A'}
+🆔 <b>Admin ID:</b> <code>${performedBy.id}</code>
+
+📢 <b>Group:</b> ${chat.title}
+🆔 <b>Chat ID:</b> <code>${chat.id}</code>
+👥 <b>Total Members:</b> ${memberCount}
+      `.trim())
     }
   }
 
