@@ -9,6 +9,20 @@ const API_URL = `https://api.telegram.org/bot${TOKEN}`
 
 const notifyJoin = true
 const notifyLeave = true
+const notifyBotJoinLeave = true
+
+let botId = null
+
+async function getBotId() {
+  if (botId) return botId
+  const res = await fetch(`${API_URL}/getMe`)
+  const data = await res.json()
+  if (data.ok) {
+    botId = data.result.id
+    return botId
+  }
+  return null
+}
 
 async function sendMessage(chat_id, text, reply_to_message_id = null, reply_markup = null) {
   const payload = { chat_id, text, parse_mode: 'HTML' }
@@ -43,11 +57,11 @@ async function getMemberCount(chat_id) {
   return 0
 }
 
-async function getBotChatStatus(chat_id) {
-  const res = await fetch(`${API_URL}/getChatMember?chat_id=${chat_id}&user_id=${(await (await fetch(`${API_URL}/getMe`)).json()).result.id}`)
-  const data = await res.json()
-  if (data.ok) return data.result.status
-  return null
+async function notifyAdmins(chat_id, message) {
+  const admins = await getAdmins(chat_id)
+  for (const admin of admins) {
+    await sendMessage(admin.user.id, message)
+  }
 }
 
 app.post('/', async (req, res) => {
@@ -71,11 +85,13 @@ app.post('/', async (req, res) => {
     }
 
     if (text === '/checkbot') {
-      const status = await getBotChatStatus(chat_id)
-      if (!status || status === 'left' || status === 'kicked') {
+      const id = await getBotId()
+      const res2 = await fetch(`${API_URL}/getChatMember?chat_id=${chat_id}&user_id=${id}`)
+      const data2 = await res2.json()
+      if (!data2.ok || ['left', 'kicked'].includes(data2.result.status)) {
         await sendMessage(chat_id, '❌ <b>Bot is not a member of this chat or has been removed.</b>', message_id)
       } else {
-        await sendMessage(chat_id, `✅ <b>Bot is currently a member of this chat.</b>\nStatus: <code>${status}</code>`, message_id)
+        await sendMessage(chat_id, `✅ <b>Bot is currently a member of this chat.</b>\nStatus: <code>${data2.result.status}</code>`, message_id)
       }
     }
 
@@ -87,26 +103,43 @@ app.post('/', async (req, res) => {
   if (body.my_chat_member || body.chat_member) {
     const data = body.my_chat_member || body.chat_member
     const chat = data.chat
-    const user = data.new_chat_member.user
     const oldStatus = data.old_chat_member.status
     const newStatus = data.new_chat_member.status
+    const user = data.new_chat_member.user
 
-    const isJoin = newStatus === 'member' && oldStatus === 'left'
-    const isAdd = oldStatus === 'kicked' && newStatus === 'member'
-    const isLeave = newStatus === 'left'
-    const isRemove = newStatus === 'kicked'
-
+    const id = await getBotId()
     const memberCount = await getMemberCount(chat.id)
-    const admins = await getAdmins(chat.id)
 
-    for (const admin of admins) {
-      const id = admin.user.id
+    if (user.id === id) {
+      if (notifyBotJoinLeave) {
+        if (newStatus === 'member' && (oldStatus === 'left' || oldStatus === 'kicked')) {
+          await notifyAdmins(chat.id, `
+🤖 <b>Bot Added to Chat</b>
 
-      if (isJoin && notifyJoin) {
-        await sendMessage(id, `
+📢 <b>Chat:</b> ${chat.title}
+🆔 <b>Chat ID:</b> <code>${chat.id}</code>
+📚 <b>Type:</b> ${chat.type}
+👥 <b>Total Members:</b> ${memberCount}
+          `.trim())
+        }
+
+        if ((newStatus === 'left' || newStatus === 'kicked') && (oldStatus === 'member' || oldStatus === 'administrator' || oldStatus === 'creator')) {
+          await notifyAdmins(chat.id, `
+⚠️ <b>Bot Removed from Chat</b>
+
+📢 <b>Chat:</b> ${chat.title}
+🆔 <b>Chat ID:</b> <code>${chat.id}</code>
+📚 <b>Type:</b> ${chat.type}
+👥 <b>Total Members:</b> ${memberCount}
+          `.trim())
+        }
+      }
+    } else {
+      if (notifyJoin && newStatus === 'member' && (oldStatus === 'left' || oldStatus === 'kicked')) {
+        await notifyAdmins(chat.id, `
 ✅ <b>User Joined</b>
 
-👤 <b>User:</b> ${user.first_name || ''} ${user.last_name || ''} 
+👤 <b>User:</b> ${user.first_name || ''} ${user.last_name || ''}
 🔗 <b>Username:</b> @${user.username || 'N/A'}
 🆔 <b>User ID:</b> <code>${user.id}</code>
 
@@ -116,42 +149,11 @@ app.post('/', async (req, res) => {
 👥 <b>Total Members:</b> ${memberCount}
         `.trim())
       }
-
-      if (isAdd && notifyJoin) {
-        await sendMessage(id, `
-➕ <b>User Added</b>
-
-👤 <b>User:</b> ${user.first_name || ''} ${user.last_name || ''} 
-🔗 <b>Username:</b> @${user.username || 'N/A'}
-🆔 <b>User ID:</b> <code>${user.id}</code>
-
-📢 <b>Group:</b> ${chat.title}
-🆔 <b>Chat ID:</b> <code>${chat.id}</code>
-📚 <b>Type:</b> ${chat.type}
-👥 <b>Total Members:</b> ${memberCount}
-        `.trim())
-      }
-
-      if (isLeave && notifyLeave) {
-        await sendMessage(id, `
+      if (notifyLeave && (newStatus === 'left' || newStatus === 'kicked') && (oldStatus === 'member' || oldStatus === 'administrator' || oldStatus === 'creator')) {
+        await notifyAdmins(chat.id, `
 🚪 <b>User Left</b>
 
-👤 <b>User:</b> ${user.first_name || ''} ${user.last_name || ''} 
-🔗 <b>Username:</b> @${user.username || 'N/A'}
-🆔 <b>User ID:</b> <code>${user.id}</code>
-
-📢 <b>Group:</b> ${chat.title}
-🆔 <b>Chat ID:</b> <code>${chat.id}</code>
-📚 <b>Type:</b> ${chat.type}
-👥 <b>Total Members:</b> ${memberCount}
-        `.trim())
-      }
-
-      if (isRemove && notifyLeave) {
-        await sendMessage(id, `
-❌ <b>User Removed</b>
-
-👤 <b>User:</b> ${user.first_name || ''} ${user.last_name || ''} 
+👤 <b>User:</b> ${user.first_name || ''} ${user.last_name || ''}
 🔗 <b>Username:</b> @${user.username || 'N/A'}
 🆔 <b>User ID:</b> <code>${user.id}</code>
 
