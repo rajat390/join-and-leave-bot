@@ -76,7 +76,9 @@ app.post('/', async (req, res) => {
     if (text === '/start') {
       const botInfo = await (await fetch(`${API_URL}/getMe`)).json()
       const botUsername = botInfo.result.username
-      await sendMessage(chat_id, `👋 Welcome,use me to get group member join or leave notification 😎</b>`, message_id, {
+      const user = msg.from
+      await sendMessage(chat_id, `👋 Welcome, <b>${user.first_name || ''}</b>!  
+Use me to get group member join or leave notification 😎`, message_id, {
         inline_keyboard: [
           [{ text: '➕ Add to Group', url: `https://t.me/${botUsername}?startgroup=true` }]
         ]
@@ -94,7 +96,7 @@ app.post('/', async (req, res) => {
     const user = data.new_chat_member.user
     const oldStatus = data.old_chat_member.status
     const newStatus = data.new_chat_member.status
-    const performedBy = data.from // Who did the action
+    const performedBy = data.from
     const memberCount = await getMemberCount(chat.id)
     const isBot = user.is_bot
     const isSelf = user.id === performedBy.id
@@ -115,7 +117,7 @@ app.post('/', async (req, res) => {
 
     if (notifyLeave && oldStatus === 'member' && newStatus === 'left' && isSelf) {
       await notifyAdmins(chat.id, `
-🚪 <b>User Left Voluntarily</b>
+🚪 <b>User Left</b>
 
 👤 <b>Name:</b> ${user.first_name || ''} ${user.last_name || ''}
 🔗 <b>Username:</b> @${user.username || 'N/A'}
