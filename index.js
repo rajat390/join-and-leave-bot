@@ -43,6 +43,13 @@ async function getMemberCount(chat_id) {
   return 0
 }
 
+async function getBotChatStatus(chat_id) {
+  const res = await fetch(`${API_URL}/getChatMember?chat_id=${chat_id}&user_id=${(await (await fetch(`${API_URL}/getMe`)).json()).result.id}`)
+  const data = await res.json()
+  if (data.ok) return data.result.status
+  return null
+}
+
 app.post('/', async (req, res) => {
   const body = req.body
 
@@ -61,6 +68,15 @@ app.post('/', async (req, res) => {
           [{ text: '📢 Join Channel', url: 'https://t.me/YOUR_CHANNEL_USERNAME' }]
         ]
       })
+    }
+
+    if (text === '/checkbot') {
+      const status = await getBotChatStatus(chat_id)
+      if (!status || status === 'left' || status === 'kicked') {
+        await sendMessage(chat_id, '❌ <b>Bot is not a member of this chat or has been removed.</b>', message_id)
+      } else {
+        await sendMessage(chat_id, `✅ <b>Bot is currently a member of this chat.</b>\nStatus: <code>${status}</code>`, message_id)
+      }
     }
 
     if (msg.new_chat_members || msg.left_chat_member) {
