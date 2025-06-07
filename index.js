@@ -76,8 +76,7 @@ app.post('/', async (req, res) => {
     if (text === '/start') {
       const botInfo = await (await fetch(`${API_URL}/getMe`)).json()
       const botUsername = botInfo.result.username
-      await sendMessage(chat_id, `👋 Welcome, <b>${user.first_name || ''}</b>!  
-Use me to get group member join or leave notification 😎`, message_id, {
+      await sendMessage(chat_id, `👋 Welcome,use me to get group member join or leave notification 😎</b>`, message_id, {
         inline_keyboard: [
           [{ text: '➕ Add to Group', url: `https://t.me/${botUsername}?startgroup=true` }]
         ]
