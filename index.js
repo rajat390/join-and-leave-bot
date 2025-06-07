@@ -14,11 +14,18 @@ async function sendMessage(chat_id, text, reply_to_message_id = null, reply_mark
   const payload = { chat_id, text, parse_mode: 'HTML' }
   if (reply_to_message_id) payload.reply_to_message_id = reply_to_message_id
   if (reply_markup) payload.reply_markup = reply_markup
-
   await fetch(`${API_URL}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
+  })
+}
+
+async function deleteMessage(chat_id, message_id) {
+  await fetch(`${API_URL}/deleteMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id, message_id })
   })
 }
 
@@ -46,12 +53,18 @@ app.post('/', async (req, res) => {
     const message_id = msg.message_id
 
     if (text === '/start') {
+      const botInfo = await (await fetch(`${API_URL}/getMe`)).json()
+      const botUsername = botInfo.result.username
       await sendMessage(chat_id, `👋 <b>Welcome to the bot!</b>`, message_id, {
         inline_keyboard: [
-          [{ text: '➕ Add to Group', url: `https://t.me/${(await (await fetch(`${API_URL}/getMe`)).json()).result.username}?startgroup=true` }],
+          [{ text: '➕ Add to Group', url: `https://t.me/${botUsername}?startgroup=true` }],
           [{ text: '📢 Join Channel', url: 'https://t.me/YOUR_CHANNEL_USERNAME' }]
         ]
       })
+    }
+
+    if (msg.new_chat_members || msg.left_chat_member) {
+      await deleteMessage(chat_id, message_id)
     }
   }
 
@@ -59,9 +72,13 @@ app.post('/', async (req, res) => {
     const data = body.my_chat_member || body.chat_member
     const chat = data.chat
     const user = data.new_chat_member.user
-    const status = data.new_chat_member.status
-    const isJoin = status === 'member'
-    const isLeave = status === 'left' || status === 'kicked'
+    const oldStatus = data.old_chat_member.status
+    const newStatus = data.new_chat_member.status
+
+    const isJoin = newStatus === 'member' && oldStatus === 'left'
+    const isAdd = oldStatus === 'kicked' && newStatus === 'member'
+    const isLeave = newStatus === 'left'
+    const isRemove = newStatus === 'kicked'
 
     const memberCount = await getMemberCount(chat.id)
     const admins = await getAdmins(chat.id)
@@ -71,7 +88,22 @@ app.post('/', async (req, res) => {
 
       if (isJoin && notifyJoin) {
         await sendMessage(id, `
-✅ <b>New Member Joined</b>
+✅ <b>User Joined</b>
+
+👤 <b>User:</b> ${user.first_name || ''} ${user.last_name || ''} 
+🔗 <b>Username:</b> @${user.username || 'N/A'}
+🆔 <b>User ID:</b> <code>${user.id}</code>
+
+📢 <b>Group:</b> ${chat.title}
+🆔 <b>Chat ID:</b> <code>${chat.id}</code>
+📚 <b>Type:</b> ${chat.type}
+👥 <b>Total Members:</b> ${memberCount}
+        `.trim())
+      }
+
+      if (isAdd && notifyJoin) {
+        await sendMessage(id, `
+➕ <b>User Added</b>
 
 👤 <b>User:</b> ${user.first_name || ''} ${user.last_name || ''} 
 🔗 <b>Username:</b> @${user.username || 'N/A'}
@@ -86,7 +118,22 @@ app.post('/', async (req, res) => {
 
       if (isLeave && notifyLeave) {
         await sendMessage(id, `
-🚪 <b>Member Left or Removed</b>
+🚪 <b>User Left</b>
+
+👤 <b>User:</b> ${user.first_name || ''} ${user.last_name || ''} 
+🔗 <b>Username:</b> @${user.username || 'N/A'}
+🆔 <b>User ID:</b> <code>${user.id}</code>
+
+📢 <b>Group:</b> ${chat.title}
+🆔 <b>Chat ID:</b> <code>${chat.id}</code>
+📚 <b>Type:</b> ${chat.type}
+👥 <b>Total Members:</b> ${memberCount}
+        `.trim())
+      }
+
+      if (isRemove && notifyLeave) {
+        await sendMessage(id, `
+❌ <b>User Removed</b>
 
 👤 <b>User:</b> ${user.first_name || ''} ${user.last_name || ''} 
 🔗 <b>Username:</b> @${user.username || 'N/A'}
