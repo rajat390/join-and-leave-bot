@@ -78,8 +78,7 @@ app.post('/', async (req, res) => {
       const botUsername = botInfo.result.username
       await sendMessage(chat_id, `👋 <b>Welcome to the bot!</b>`, message_id, {
         inline_keyboard: [
-          [{ text: '➕ Add to Group', url: `https://t.me/${botUsername}?startgroup=true` }],
-          [{ text: '📢 Join Channel', url: `https://t.me/${botUsername}` }]
+          [{ text: '➕ Add to Group', url: `https://t.me/${botUsername}?startgroup=true` }]
         ]
       })
     }
